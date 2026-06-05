@@ -1,16 +1,25 @@
 import { Request, Response, NextFunction } from 'express';
-import { ErrorMessages, HTTP_STATUS } from '../constants/errors';
+import { ErrorMessages, HTTP_STATUS } from '../constants';
+import logger from '../config/logger';
 
 interface ApiError extends Error {
   statusCode?: number;
   isOperational?: boolean;
 }
 
-export const errorHandler = (err: ApiError, req: Request, res: Response, next: NextFunction) => {
+export const notFoundHandler = (req: Request, res: Response): void => {
+  res.status(HTTP_STATUS.NOT_FOUND).json({
+    success: false,
+    statusCode: HTTP_STATUS.NOT_FOUND,
+    message: ErrorMessages.NOT_FOUND,
+  });
+};
+
+export const errorHandler = (err: ApiError, req: Request, res: Response, next: NextFunction): void => {
   const statusCode = err.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR;
   const message = err.message || ErrorMessages.INTERNAL_SERVER_ERROR;
 
-  console.error(`[${new Date().toISOString()}] Error:`, {
+  logger.error(`[Error] ${statusCode} - ${message}`, {
     statusCode,
     message,
     stack: err.stack,
