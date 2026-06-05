@@ -1,50 +1,66 @@
 import { query } from '../db/connection';
-import { Collection } from '../types';
-import { calculateDaysOverdue } from '../utils/helpers';
+import logger from '../config/logger';
 
 export class CollectionService {
-  async identifyOverdueLoans(): Promise<void> {
-    // Find loans with unpaid schedules past due date
-    const result = await query(`
-      SELECT DISTINCT
-        l.id,
-        (CURRENT_DATE - MIN(ls.due_date)) as days_overdue,
-        SUM(CASE WHEN ls.is_paid = FALSE THEN ls.total_amount ELSE 0 END) as total_overdue
-      FROM loans l
-      JOIN loan_schedules ls ON l.id = ls.loan_id
-      WHERE l.status IN ('ACTIVE', 'DISBURSED')
-      AND ls.is_paid = FALSE
-      AND ls.due_date < CURRENT_DATE
-      GROUP BY l.id
-    `);
+  /**
+   * Create collection record
+   */
+  async createCollection(collectionData: any, userId: number): Promise<any> {
+    const result = await query(
+      `INSERT INTO collections (
+        loan_id, borrower_id, collection_date, days_overdue,
+        overdue_amount, arrears_amount, collection_officer_id,
+        collection_status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *`,
+      [
+        collectionData.loan_id,
+        collectionData.borrower_id,
+        new Date(collectionData.collection_date),
+        collectionData.days_overdue,
+        collectionData.overdue_amount,
+        collectionData.arrears_amount,
+        userId,
+        'PENDING',
+      ]
+    );
 
-    // Insert or update overdue_loans records
-    for (const loan of result.rows) {
-      await query(
-        `INSERT INTO overdue_loans (loan_id, days_overdue, total_overdue_amount, first_overdue_date, status)
-         VALUES ($1, $2, $3, CURRENT_DATE, 'ACTIVE')
-         ON CONFLICT (loan_id) DO UPDATE SET
-         days_overdue = $2,
-         total_overdue_amount = $3,
-         updated_at = NOW()`,
-        [loan.id, loan.days_overdue, loan.total_overdue]
-      );
-    }
+    logger.info(`[Collection] Collection created for loan ${collectionData.loan_id}`);
+    return result.rows[0];
   }
 
+  /**
+   * Get collections by loan
+   */
+  async getCollectionsByLoan(loanId: number): Promise<any[]> {
+    const result = await query(
+      `SELECT c.*, u.first_name, u.last_name
+       FROM collections c
+       LEFT JOIN users u ON c.collection_officer_id = u.id
+       WHERE c.loan_id = $1
+       ORDER BY c.collection_date DESC`,
+      [loanId]
+    );
+
+    return result.rows;
+  }
+
+  /**
+   * Get overdue loans
+   */
   async getOverdueLoans(branchId?: number): Promise<any[]> {
     let sql = `
-      SELECT
-        ol.*,
-        l.loan_number,
-        b.first_name || ' ' || b.last_name as borrower_name,
-        b.phone as borrower_phone,
-        l.principal_amount,
-        l.branch_id
-      FROM overdue_loans ol
-      JOIN loans l ON ol.loan_id = l.id
-      JOIN borrowers b ON l.borrower_id = b.id
-      WHERE ol.status = 'ACTIVE'
+      SELECT l.id, l.loan_number, b.first_name, b.last_name, b.phone_number,
+             l.total_amount_due, COALESCE(SUM(r.amount_paid), 0) as total_paid,
+             (l.total_amount_due - COALESCE(SUM(r.amount_paid), 0)) as outstanding,
+             EXTRACT(DAY FROM (NOW() - ls.due_date)) as days_overdue,
+             l.status, b2.branch_name
+      FROM loans l
+      LEFT JOIN borrowers b ON l.borrower_id = b.id
+      LEFT JOIN branches b2 ON l.branch_id = b2.id
+      LEFT JOIN repayments r ON l.id = r.loan_id
+      LEFT JOIN loan_schedules ls ON l.id = ls.loan_id AND ls.is_paid = false
+      WHERE l.status = 'DISBURSED' AND ls.due_date < NOW()
     `;
 
     const params: any[] = [];
@@ -54,82 +70,98 @@ export class CollectionService {
       params.push(branchId);
     }
 
-    sql += ' ORDER BY ol.days_overdue DESC';
+    sql += ` GROUP BY l.id, b.id, ls.due_date, b2.id
+             ORDER BY days_overdue DESC`;
 
     const result = await query(sql, params);
     return result.rows;
   }
 
-  async createCollection(collectionData: any): Promise<Collection> {
+  /**
+   * Get portfolio at risk (PAR)
+   */
+  async getPortfolioAtRisk(branchId?: number): Promise<any> {
+    let sql = `
+      SELECT
+        COUNT(DISTINCT l.id) as total_loans,
+        SUM(l.total_amount_due) as total_portfolio,
+        COUNT(DISTINCT CASE WHEN l.status = 'DISBURSED' AND ls.due_date < NOW() THEN l.id END) as overdue_loans,
+        COALESCE(SUM(CASE WHEN l.status = 'DISBURSED' AND ls.due_date < NOW()
+                         THEN (l.total_amount_due - COALESCE(SUM(r.amount_paid), 0))
+                    END), 0) as overdue_amount,
+        ROUND(100.0 * COUNT(DISTINCT CASE WHEN l.status = 'DISBURSED' AND ls.due_date < NOW() THEN l.id END)
+              / NULLIF(COUNT(DISTINCT l.id), 0), 2) as par_percentage
+      FROM loans l
+      LEFT JOIN loan_schedules ls ON l.id = ls.loan_id AND ls.is_paid = false
+      LEFT JOIN repayments r ON l.id = r.loan_id
+    `;
+
+    const params: any[] = [];
+
+    if (branchId) {
+      sql += ` WHERE l.branch_id = $${params.length + 1}`;
+      params.push(branchId);
+    }
+
+    const result = await query(sql, params);
+    return result.rows[0];
+  }
+
+  /**
+   * Add collection note
+   */
+  async addCollectionNote(
+    collectionId: number,
+    notes: string,
+    followUpDate: Date,
+    userId: number
+  ): Promise<any> {
     const result = await query(
-      `INSERT INTO collections (
-        loan_id, borrower_id, collection_date, amount_collected, outstanding_amount,
-        collection_officer_id, collection_method, notes, status, days_overdue, days_in_arrears
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING', $9, $10)
+      `INSERT INTO collection_notes (
+        collection_id, note_date, notes, follow_up_date, created_by
+      ) VALUES ($1, $2, $3, $4, $5)
       RETURNING *`,
-      [
-        collectionData.loan_id,
-        collectionData.borrower_id,
-        collectionData.collection_date,
-        collectionData.amount_collected,
-        collectionData.outstanding_amount,
-        collectionData.collection_officer_id,
-        collectionData.collection_method,
-        collectionData.notes,
-        collectionData.days_overdue || 0,
-        collectionData.days_in_arrears || 0,
-      ]
+      [collectionId, new Date(), notes, followUpDate, userId]
     );
 
     return result.rows[0];
   }
 
-  async addFollowUpNote(noteData: any): Promise<any> {
+  /**
+   * Get collection notes
+   */
+  async getCollectionNotes(collectionId: number): Promise<any[]> {
     const result = await query(
-      `INSERT INTO follow_up_notes (
-        collection_id, loan_id, collection_officer_id, follow_up_date,
-        promise_to_pay_date, amount_promised, notes, note_type, follow_up_status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *`,
-      [
-        noteData.collection_id,
-        noteData.loan_id,
-        noteData.collection_officer_id,
-        noteData.follow_up_date,
-        noteData.promise_to_pay_date,
-        noteData.amount_promised,
-        noteData.notes,
-        noteData.note_type || 'FOLLOW_UP',
-        noteData.follow_up_status || 'PENDING',
-      ]
-    );
-
-    return result.rows[0];
-  }
-
-  async getFollowUpNotes(collectionId: number): Promise<any[]> {
-    const result = await query(
-      `SELECT * FROM follow_up_notes WHERE collection_id = $1 ORDER BY created_at DESC`,
+      `SELECT cn.*, u.first_name, u.last_name
+       FROM collection_notes cn
+       LEFT JOIN users u ON cn.created_by = u.id
+       WHERE cn.collection_id = $1
+       ORDER BY cn.note_date DESC`,
       [collectionId]
     );
+
     return result.rows;
   }
 
-  async updatePromiseToPayStatus(noteId: number, isKept: boolean): Promise<void> {
-    await query(
-      `UPDATE follow_up_notes SET is_promise_kept = $1, updated_at = NOW() WHERE id = $2`,
-      [isKept, noteId]
-    );
-  }
-
-  async getDaysInArrears(loanId: number): Promise<number> {
+  /**
+   * Update collection status
+   */
+  async updateCollectionStatus(
+    collectionId: number,
+    status: string
+  ): Promise<any> {
     const result = await query(
-      `SELECT COALESCE((CURRENT_DATE - MIN(due_date))::INTEGER, 0) as days_in_arrears
-       FROM loan_schedules
-       WHERE loan_id = $1 AND is_paid = FALSE AND due_date < CURRENT_DATE`,
-      [loanId]
+      `UPDATE collections SET collection_status = $1, updated_at = NOW()
+       WHERE id = $2 RETURNING *`,
+      [status, collectionId]
     );
 
-    return result.rows[0]?.days_in_arrears || 0;
+    if (result.rows.length === 0) {
+      throw new Error('Collection not found');
+    }
+
+    return result.rows[0];
   }
 }
+
+export default CollectionService;
