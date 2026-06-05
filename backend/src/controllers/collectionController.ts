@@ -1,77 +1,142 @@
 import { Request, Response } from 'express';
-import { asyncHandler } from '../middleware/errorHandler';
-import { CollectionService } from '../services/collectionService';
+import { asyncHandler, AppError } from '../middleware/errorHandler';
+import CollectionService from '../services/collectionService';
 import { HTTP_STATUS } from '../constants/errors';
 
 const collectionService = new CollectionService();
 
-export const identifyOverdueLoans = asyncHandler(async (req: Request, res: Response) => {
-  await collectionService.identifyOverdueLoans();
+/**
+ * Create collection record
+ */
+export const createCollection = asyncHandler(async (req: Request, res: Response) => {
+  const { loan_id, borrower_id, collection_date, days_overdue, overdue_amount, arrears_amount } = req.body;
 
-  res.status(HTTP_STATUS.OK).json({
+  if (!loan_id || !borrower_id || !collection_date) {
+    throw new AppError('Missing required fields', HTTP_STATUS.BAD_REQUEST);
+  }
+
+  const collection = await collectionService.createCollection(
+    {
+      loan_id,
+      borrower_id,
+      collection_date,
+      days_overdue,
+      overdue_amount,
+      arrears_amount,
+    },
+    req.user.id
+  );
+
+  res.status(HTTP_STATUS.CREATED).json({
     success: true,
-    message: 'Overdue loans identified',
+    message: 'Collection record created successfully',
+    data: collection,
   });
 });
 
+/**
+ * Get collections by loan
+ */
+export const getCollectionsByLoan = asyncHandler(async (req: Request, res: Response) => {
+  const { loanId } = req.params;
+  const collections = await collectionService.getCollectionsByLoan(parseInt(loanId));
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: collections,
+    total: collections.length,
+  });
+});
+
+/**
+ * Get overdue loans
+ */
 export const getOverdueLoans = asyncHandler(async (req: Request, res: Response) => {
-  const branchId = req.user.branch_id;
+  const { branch_id } = req.query;
+  const branchId = branch_id ? parseInt(branch_id as string) : req.user.branch_id;
+
   const overdueLoans = await collectionService.getOverdueLoans(branchId);
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
     data: overdueLoans,
+    total: overdueLoans.length,
   });
 });
 
-export const createCollection = asyncHandler(async (req: Request, res: Response) => {
-  const collectionData = {
-    ...req.body,
-    collection_officer_id: req.user.id,
-  };
+/**
+ * Get portfolio at risk
+ */
+export const getPortfolioAtRisk = asyncHandler(async (req: Request, res: Response) => {
+  const { branch_id } = req.query;
+  const branchId = branch_id ? parseInt(branch_id as string) : req.user.branch_id;
 
-  const collection = await collectionService.createCollection(collectionData);
+  const par = await collectionService.getPortfolioAtRisk(branchId);
 
-  res.status(HTTP_STATUS.CREATED).json({
+  res.status(HTTP_STATUS.OK).json({
     success: true,
-    message: 'Collection record created',
-    data: collection,
+    data: par,
   });
 });
 
-export const addFollowUpNote = asyncHandler(async (req: Request, res: Response) => {
-  const noteData = {
-    ...req.body,
-    collection_officer_id: req.user.id,
-  };
+/**
+ * Add collection note
+ */
+export const addCollectionNote = asyncHandler(async (req: Request, res: Response) => {
+  const { collectionId } = req.params;
+  const { notes, follow_up_date } = req.body;
 
-  const note = await collectionService.addFollowUpNote(noteData);
+  if (!notes) {
+    throw new AppError('Notes are required', HTTP_STATUS.BAD_REQUEST);
+  }
+
+  const note = await collectionService.addCollectionNote(
+    parseInt(collectionId),
+    notes,
+    follow_up_date ? new Date(follow_up_date) : null,
+    req.user.id
+  );
 
   res.status(HTTP_STATUS.CREATED).json({
     success: true,
-    message: 'Follow-up note added',
+    message: 'Collection note added successfully',
     data: note,
   });
 });
 
-export const getFollowUpNotes = asyncHandler(async (req: Request, res: Response) => {
+/**
+ * Get collection notes
+ */
+export const getCollectionNotes = asyncHandler(async (req: Request, res: Response) => {
   const { collectionId } = req.params;
-  const notes = await collectionService.getFollowUpNotes(parseInt(collectionId));
+  const notes = await collectionService.getCollectionNotes(parseInt(collectionId));
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
     data: notes,
+    total: notes.length,
   });
 });
 
-export const updatePromiseToPayStatus = asyncHandler(async (req: Request, res: Response) => {
-  const { noteId } = req.params;
-  const { isKept } = req.body;
+/**
+ * Update collection status
+ */
+export const updateCollectionStatus = asyncHandler(async (req: Request, res: Response) => {
+  const { collectionId } = req.params;
+  const { status } = req.body;
 
-  await collectionService.updatePromiseToPayStatus(parseInt(noteId), isKept);
+  if (!status) {
+    throw new AppError('Status is required', HTTP_STATUS.BAD_REQUEST);
+  }
+
+  const collection = await collectionService.updateCollectionStatus(
+    parseInt(collectionId),
+    status
+  );
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
-    message: 'Promise-to-pay status updated',
+    message: 'Collection status updated successfully',
+    data: collection,
   });
 });

@@ -1,17 +1,30 @@
 import { Request, Response } from 'express';
-import { asyncHandler } from '../middleware/errorHandler';
-import { RepaymentService } from '../services/repaymentService';
+import { asyncHandler, AppError } from '../middleware/errorHandler';
+import RepaymentService from '../services/repaymentService';
 import { HTTP_STATUS } from '../constants/errors';
 
 const repaymentService = new RepaymentService();
 
+/**
+ * Record repayment
+ */
 export const recordRepayment = asyncHandler(async (req: Request, res: Response) => {
-  const repaymentData = {
-    ...req.body,
-    created_by: req.user.id,
-  };
+  const { loan_id, amount_paid, repayment_date, payment_method, reference_number } = req.body;
 
-  const repayment = await repaymentService.recordRepayment(repaymentData);
+  if (!loan_id || !amount_paid || !repayment_date) {
+    throw new AppError('Missing required fields', HTTP_STATUS.BAD_REQUEST);
+  }
+
+  const repayment = await repaymentService.recordRepayment(
+    {
+      loan_id,
+      amount_paid,
+      repayment_date,
+      payment_method,
+      reference_number,
+    },
+    req.user.id
+  );
 
   res.status(HTTP_STATUS.CREATED).json({
     success: true,
@@ -20,17 +33,38 @@ export const recordRepayment = asyncHandler(async (req: Request, res: Response) 
   });
 });
 
-export const getRepaymentHistory = asyncHandler(async (req: Request, res: Response) => {
+/**
+ * Get repayments by loan
+ */
+export const getRepaymentsByLoan = asyncHandler(async (req: Request, res: Response) => {
   const { loanId } = req.params;
-  const repayments = await repaymentService.getRepaymentHistory(parseInt(loanId));
+  const repayments = await repaymentService.getRepaymentsByLoan(parseInt(loanId));
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
     data: repayments,
+    total: repayments.length,
   });
 });
 
-export const getRepayment = asyncHandler(async (req: Request, res: Response) => {
+/**
+ * Get repayments by borrower
+ */
+export const getRepaymentsByBorrower = asyncHandler(async (req: Request, res: Response) => {
+  const { borrowerId } = req.params;
+  const repayments = await repaymentService.getRepaymentsByBorrower(parseInt(borrowerId));
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: repayments,
+    total: repayments.length,
+  });
+});
+
+/**
+ * Get repayment by ID
+ */
+export const getRepaymentById = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const repayment = await repaymentService.getRepaymentById(parseInt(id));
 
@@ -40,17 +74,15 @@ export const getRepayment = asyncHandler(async (req: Request, res: Response) => 
   });
 });
 
-export const getDailyCollectionSummary = asyncHandler(async (req: Request, res: Response) => {
-  const { date } = req.query;
-  const branchId = req.user.branch_id;
-
-  const summary = await repaymentService.getDailyCollectionSummary(
-    branchId,
-    new Date(date as string)
-  );
+/**
+ * Get total repaid for loan
+ */
+export const getTotalRepaid = asyncHandler(async (req: Request, res: Response) => {
+  const { loanId } = req.params;
+  const totalRepaid = await repaymentService.getTotalRepaid(parseInt(loanId));
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
-    data: summary,
+    data: totalRepaid,
   });
 });

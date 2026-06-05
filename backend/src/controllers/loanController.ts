@@ -1,14 +1,18 @@
 import { Request, Response } from 'express';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
-import { LoanService } from '../services/loanService';
+import LoanService from '../services/loanService';
 import { HTTP_STATUS } from '../constants/errors';
 
 const loanService = new LoanService();
 
+/**
+ * Create loan application
+ */
 export const createLoan = asyncHandler(async (req: Request, res: Response) => {
   const loanData = {
     ...req.body,
     branch_id: req.user.branch_id,
+    loan_officer_id: req.user.id,
     created_by: req.user.id,
   };
 
@@ -21,6 +25,9 @@ export const createLoan = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+/**
+ * Get loan by ID
+ */
 export const getLoan = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const loan = await loanService.getLoanById(parseInt(id));
@@ -31,18 +38,28 @@ export const getLoan = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+/**
+ * Get all loans
+ */
 export const getAllLoans = asyncHandler(async (req: Request, res: Response) => {
-  const { status } = req.query;
-  const branchId = req.user.branch_id;
+  const { status, branch_id } = req.query;
+  const branchId = branch_id ? parseInt(branch_id as string) : req.user.branch_id;
 
-  const loans = await loanService.getAllLoans(status as string, branchId);
+  const loans = await loanService.getAllLoans(
+    status as string,
+    branchId
+  );
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
     data: loans,
+    total: loans.length,
   });
 });
 
+/**
+ * Get loans by borrower
+ */
 export const getLoansByBorrower = asyncHandler(async (req: Request, res: Response) => {
   const { borrowerId } = req.params;
   const loans = await loanService.getLoansByBorrower(parseInt(borrowerId));
@@ -50,12 +67,38 @@ export const getLoansByBorrower = asyncHandler(async (req: Request, res: Respons
   res.status(HTTP_STATUS.OK).json({
     success: true,
     data: loans,
+    total: loans.length,
   });
 });
 
+/**
+ * Appraise loan
+ */
+export const appraiseLoan = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const appraisal = await loanService.appraiseLoan(
+    parseInt(id),
+    req.body,
+    req.user.id
+  );
+
+  res.status(HTTP_STATUS.CREATED).json({
+    success: true,
+    message: 'Loan appraisal created successfully',
+    data: appraisal,
+  });
+});
+
+/**
+ * Approve loan
+ */
 export const approveLoan = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { approvedAmount, approvalComments } = req.body;
+
+  if (!approvedAmount) {
+    throw new AppError('Approved amount is required', HTTP_STATUS.BAD_REQUEST);
+  }
 
   const loan = await loanService.approveLoan(
     parseInt(id),
@@ -71,9 +114,36 @@ export const approveLoan = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+/**
+ * Reject loan
+ */
+export const rejectLoan = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+
+  const loan = await loanService.rejectLoan(
+    parseInt(id),
+    reason || '',
+    req.user.id
+  );
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: 'Loan rejected successfully',
+    data: loan,
+  });
+});
+
+/**
+ * Disburse loan
+ */
 export const disburseLoan = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { disbursementDate } = req.body;
+
+  if (!disbursementDate) {
+    throw new AppError('Disbursement date is required', HTTP_STATUS.BAD_REQUEST);
+  }
 
   const loan = await loanService.disburseLoan(
     parseInt(id),
@@ -88,12 +158,29 @@ export const disburseLoan = asyncHandler(async (req: Request, res: Response) => 
   });
 });
 
+/**
+ * Get loan schedule
+ */
 export const getLoanSchedule = asyncHandler(async (req: Request, res: Response) => {
-  const { loanId } = req.params;
-  const schedule = await loanService.getLoanSchedule(parseInt(loanId));
+  const { id } = req.params;
+  const schedule = await loanService.getLoanSchedule(parseInt(id));
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
     data: schedule,
+    total: schedule.length,
+  });
+});
+
+/**
+ * Get loan outstanding balance
+ */
+export const getLoanBalance = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const balance = await loanService.getLoanOutstandingBalance(parseInt(id));
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: balance,
   });
 });
