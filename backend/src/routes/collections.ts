@@ -6,11 +6,12 @@ const router = Router();
 
 router.use(authenticateToken);
 
-router.post('/identify-overdue', collectionController.identifyOverdueLoans);
+router.post('/', collectionController.createCollection);
 router.get('/overdue-loans', collectionController.getOverdueLoans);
-router.post('/create', collectionController.createCollection);
-router.post('/:collectionId/follow-up-notes', collectionController.addFollowUpNote);
-router.get('/:collectionId/follow-up-notes', collectionController.getFollowUpNotes);
-router.put('/follow-up-notes/:noteId/promise-status', collectionController.updatePromiseToPayStatus);
+router.get('/portfolio-at-risk', collectionController.getPortfolioAtRisk);
+router.get('/loan/:loanId', collectionController.getCollectionsByLoan);
+router.post('/:collectionId/notes', collectionController.addCollectionNote);
+router.get('/:collectionId/notes', collectionController.getCollectionNotes);
+router.put('/:collectionId/status', collectionController.updateCollectionStatus);
 
 export default router;
