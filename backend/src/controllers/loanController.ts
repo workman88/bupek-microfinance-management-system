@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import LoanService from '../services/loanService';
-import { HTTP_STATUS } from '../constants/errors';
+import { HTTP_STATUS } from '../constants';
 
 const loanService = new LoanService();
 
@@ -11,9 +11,9 @@ const loanService = new LoanService();
 export const createLoan = asyncHandler(async (req: Request, res: Response) => {
   const loanData = {
     ...req.body,
-    branch_id: req.user.branch_id,
-    loan_officer_id: req.user.id,
-    created_by: req.user.id,
+    branch_id: (req as any).user.branch_id,
+    loan_officer_id: (req as any).user.id,
+    created_by: (req as any).user.id,
   };
 
   const loan = await loanService.createLoan(loanData);
@@ -43,7 +43,7 @@ export const getLoan = asyncHandler(async (req: Request, res: Response) => {
  */
 export const getAllLoans = asyncHandler(async (req: Request, res: Response) => {
   const { status, branch_id } = req.query;
-  const branchId = branch_id ? parseInt(branch_id as string) : req.user.branch_id;
+  const branchId = branch_id ? parseInt(branch_id as string) : (req as any).user.branch_id;
 
   const loans = await loanService.getAllLoans(
     status as string,
@@ -79,7 +79,7 @@ export const appraiseLoan = asyncHandler(async (req: Request, res: Response) => 
   const appraisal = await loanService.appraiseLoan(
     parseInt(id),
     req.body,
-    req.user.id
+    (req as any).user.id
   );
 
   res.status(HTTP_STATUS.CREATED).json({
@@ -104,7 +104,7 @@ export const approveLoan = asyncHandler(async (req: Request, res: Response) => {
     parseInt(id),
     approvedAmount,
     approvalComments,
-    req.user.id
+    (req as any).user.id
   );
 
   res.status(HTTP_STATUS.OK).json({
@@ -124,7 +124,7 @@ export const rejectLoan = asyncHandler(async (req: Request, res: Response) => {
   const loan = await loanService.rejectLoan(
     parseInt(id),
     reason || '',
-    req.user.id
+    (req as any).user.id
   );
 
   res.status(HTTP_STATUS.OK).json({
@@ -148,7 +148,7 @@ export const disburseLoan = asyncHandler(async (req: Request, res: Response) => 
   const loan = await loanService.disburseLoan(
     parseInt(id),
     new Date(disbursementDate),
-    req.user.id
+    (req as any).user.id
   );
 
   res.status(HTTP_STATUS.OK).json({
