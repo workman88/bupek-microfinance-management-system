@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import RepaymentService from '../services/repaymentService';
-import { HTTP_STATUS } from '../constants/errors';
+import { HTTP_STATUS } from '../constants';
 
 const repaymentService = new RepaymentService();
 
@@ -23,7 +23,7 @@ export const recordRepayment = asyncHandler(async (req: Request, res: Response) 
       payment_method,
       reference_number,
     },
-    req.user.id
+    (req as any).user.id
   );
 
   res.status(HTTP_STATUS.CREATED).json({
