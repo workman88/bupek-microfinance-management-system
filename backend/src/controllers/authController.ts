@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 import AuthService from '../services/authService';
-import { HTTP_STATUS } from '../constants/errors';
+import { HTTP_STATUS } from '../constants';
 
 /**
  * User login
@@ -22,7 +22,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
  * Get current user
  */
 export const getCurrentUser = asyncHandler(async (req: Request, res: Response) => {
-  const user = await AuthService.getCurrentUser(req.user.id);
+  const user = await AuthService.getCurrentUser((req as any).user.id);
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
@@ -48,7 +48,7 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
     throw new AppError('Password must be at least 8 characters', HTTP_STATUS.BAD_REQUEST);
   }
 
-  await AuthService.changePassword(req.user.id, oldPassword, newPassword);
+  await AuthService.changePassword((req as any).user.id, oldPassword, newPassword);
 
   res.status(HTTP_STATUS.OK).json({
     success: true,
