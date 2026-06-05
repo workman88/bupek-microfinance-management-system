@@ -33,65 +33,64 @@ export const ErrorMessages = {
  * User Roles
  */
 export const USER_ROLES = {
-  ADMIN: 'ADMIN',
-  MANAGER: 'MANAGER',
-  LOAN_OFFICER: 'LOAN_OFFICER',
-  COLLECTION_OFFICER: 'COLLECTION_OFFICER',
-  ACCOUNTANT: 'ACCOUNTANT',
-  STAFF: 'STAFF',
+  ADMIN: 'admin',
+  MANAGER: 'manager',
+  OFFICER: 'officer',
+  VIEWER: 'viewer',
 };
 
 /**
  * Loan Status
  */
 export const LOAN_STATUS = {
-  PENDING: 'PENDING',
-  APPRAISED: 'APPRAISED',
-  APPROVED: 'APPROVED',
-  REJECTED: 'REJECTED',
-  DISBURSED: 'DISBURSED',
-  PAID: 'PAID',
-  DEFAULTED: 'DEFAULTED',
-  WRITTEN_OFF: 'WRITTEN_OFF',
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  DISBURSED: 'disbursed',
+  ACTIVE: 'active',
+  COMPLETED: 'completed',
+  DEFAULTED: 'defaulted',
+  REJECTED: 'rejected',
+  CANCELLED: 'cancelled',
 };
 
 /**
  * Repayment Status
  */
 export const REPAYMENT_STATUS = {
-  PENDING: 'PENDING',
-  COMPLETED: 'COMPLETED',
-  PARTIAL: 'PARTIAL',
-  OVERDUE: 'OVERDUE',
+  PENDING: 'pending',
+  COMPLETED: 'completed',
+  PARTIAL: 'partial',
+  OVERDUE: 'overdue',
+  DEFAULTED: 'defaulted',
 };
 
 /**
  * Collection Status
  */
 export const COLLECTION_STATUS = {
-  PENDING: 'PENDING',
-  IN_PROGRESS: 'IN_PROGRESS',
-  RESOLVED: 'RESOLVED',
-  ESCALATED: 'ESCALATED',
+  PENDING: 'pending',
+  IN_PROGRESS: 'in_progress',
+  RECOVERED: 'recovered',
+  WRITTEN_OFF: 'written_off',
 };
 
 /**
  * Payment Methods
  */
 export const PAYMENT_METHODS = {
-  CASH: 'CASH',
-  BANK_TRANSFER: 'BANK_TRANSFER',
-  CHEQUE: 'CHEQUE',
-  MOBILE_MONEY: 'MOBILE_MONEY',
+  CASH: 'cash',
+  BANK_TRANSFER: 'bank_transfer',
+  CHEQUE: 'cheque',
+  MOBILE_MONEY: 'mobile_money',
 };
 
 /**
  * Repayment Frequency
  */
 export const REPAYMENT_FREQUENCY = {
-  DAILY: 'DAILY',
-  WEEKLY: 'WEEKLY',
-  MONTHLY: 'MONTHLY',
-  QUARTERLY: 'QUARTERLY',
-  ANNUALLY: 'ANNUALLY',
+  DAILY: 'daily',
+  WEEKLY: 'weekly',
+  MONTHLY: 'monthly',
+  QUARTERLY: 'quarterly',
+  ANNUALLY: 'annually',
 };
