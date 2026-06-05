@@ -7,8 +7,9 @@ const router = Router();
 router.use(authenticateToken);
 
 router.post('/', repaymentController.recordRepayment);
-router.get('/:id', repaymentController.getRepayment);
-router.get('/loan/:loanId', repaymentController.getRepaymentHistory);
-router.get('/collection/summary', repaymentController.getDailyCollectionSummary);
+router.get('/:id', repaymentController.getRepaymentById);
+router.get('/loan/:loanId', repaymentController.getRepaymentsByLoan);
+router.get('/borrower/:borrowerId', repaymentController.getRepaymentsByBorrower);
+router.get('/loan/:loanId/total-repaid', repaymentController.getTotalRepaid);
 
 export default router;
